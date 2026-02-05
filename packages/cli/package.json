@@ -1,0 +1,56 @@
+{
+  "name": "tokenuse",
+  "version": "0.2.1",
+  "description": "Track and analyze Claude Code usage",
+  "keywords": [
+    "tokenuse",
+    "claude",
+    "claude-code",
+    "anthropic",
+    "usage",
+    "tracking",
+    "cli"
+  ],
+  "homepage": "https://tokenuse.ai",
+  "bugs": {
+    "url": "https://github.com/tokenuse/tokenuse/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tokenuse/tokenuse-npm.git"
+  },
+  "license": "MIT",
+  "author": "TokenUse",
+  "type": "module",
+  "bin": {
+    "tokenuse": "bin/tokenuse.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "postinstall": "node dist/install.min.js",
+    "test": "node bin/tokenuse.js --help"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "dependencies": {
+    "tar": "^7.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}

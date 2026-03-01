@@ -42,3 +42,10 @@ This repo publishes the npm package that downloads and launches the native Token
 - Build succeeds (`npm run build` in `packages/cli`).
 - Installer and wrapper flows stay intact.
 - Publish workflow metadata remains consistent with package versioning.
+
+## AGENTS Hooks
+
+- Install local hooks: `bash scripts/setup-git-hooks.sh`
+- Pre-commit guard: `.githooks/pre-commit` -> `devops/agents/verify-agents.sh --staged`
+- CI guard: `.github/workflows/agents-guard.yml`
+- Temporary bypass (rare): `SKIP_AGENTS_GUARD=1 git commit -m "..."`

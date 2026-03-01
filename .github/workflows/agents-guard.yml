@@ -1,0 +1,16 @@
+name: AGENTS Guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify-agents:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify AGENTS coverage
+        run: bash devops/agents/verify-agents.sh

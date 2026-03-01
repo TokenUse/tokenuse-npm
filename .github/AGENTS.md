@@ -1,15 +1,10 @@
-# AGENTS.md - GitHub Workflows
+# AGENTS.md - .github
 
 ## Folder Purpose
 
-`.github/workflows/` contains npm publishing automation.
-
-## What Lives Here
-
-- `publish.yml`: publishes `packages/cli` to npm on tags or manual dispatch.
+GitHub metadata and automation configuration.
 
 ## Local Rules
 
-- Keep Node version and registry settings explicit.
-- Ensure version source logic matches tag/manual input paths.
-- Do not add workflow steps that mutate unrelated repo state.
+- Keep workflows deterministic and least-privilege.
+- Reuse local guard scripts where possible.

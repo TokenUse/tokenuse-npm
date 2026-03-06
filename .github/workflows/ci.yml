@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: packages/cli/package-lock.json
+
+      - name: Install dependencies
+        working-directory: packages/cli
+        run: npm ci --ignore-scripts
+
+      - name: Build package
+        working-directory: packages/cli
+        run: npm run build
+
+      - name: Run package smoke test
+        working-directory: packages/cli
+        run: |
+          node --input-type=module -e "import('./src/platform.js').then((m) => { const p = m.getPlatformInfo(); if (!p.platform) { process.exit(1); } console.log(p.platform); })"
+
+      - name: Verify package tarball
+        working-directory: packages/cli
+        run: npm pack --dry-run

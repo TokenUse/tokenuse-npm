@@ -10,11 +10,18 @@ on:
         description: 'Version to publish (without v prefix)'
         required: true
         type: string
+      publish:
+        description: 'Set true to publish to npm (false runs validation only)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -39,6 +46,25 @@ jobs:
             echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Determine publish mode
+        id: mode
+        env:
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          SHOULD_PUBLISH=false
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            SHOULD_PUBLISH=true
+          elif [ "$INPUT_PUBLISH" = "true" ]; then
+            SHOULD_PUBLISH=true
+          fi
+
+          echo "SHOULD_PUBLISH=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "publish_mode=$SHOULD_PUBLISH"
+
+      - name: Install dependencies
+        working-directory: packages/cli
+        run: npm ci --ignore-scripts
+
       - name: Update package version
         working-directory: packages/cli
         env:
@@ -46,8 +72,37 @@ jobs:
         run: |
           npm version "$PKG_VERSION" --no-git-tag-version --allow-same-version
 
+      - name: Build package
+        working-directory: packages/cli
+        run: npm run build
+
+      - name: Run package smoke test
+        working-directory: packages/cli
+        run: |
+          node --input-type=module -e "import('./src/platform.js').then((m) => { const p = m.getPlatformInfo(); if (!p.platform) { process.exit(1); } console.log(p.platform); })"
+
+      - name: Verify package contents
+        working-directory: packages/cli
+        run: npm pack --dry-run
+
+      - name: Ensure version is not already published
+        if: steps.mode.outputs.SHOULD_PUBLISH == 'true'
+        working-directory: packages/cli
+        env:
+          PKG_VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if npm view "tokenuse@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "::error::tokenuse@$PKG_VERSION is already published on npm."
+            exit 1
+          fi
+
       - name: Publish to npm
+        if: steps.mode.outputs.SHOULD_PUBLISH == 'true'
         working-directory: packages/cli
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Validation-only summary
+        if: steps.mode.outputs.SHOULD_PUBLISH != 'true'
+        run: echo "Validation completed. Publish step skipped (publish=false)."

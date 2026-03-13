@@ -1,6 +1,6 @@
 {
   "name": "tokenuse",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Track and analyze Claude Code usage",
   "keywords": [
     "tokenuse",

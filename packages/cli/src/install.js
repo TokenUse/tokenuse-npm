@@ -9,7 +9,7 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const VERSION = '0.3.3';
+const VERSION = '0.4.0';
 const BINARY_DIR = join(__dirname, '..', '.tokenuse', 'bin');
 
 // Platform detection (inlined from platform.js)
@@ -142,27 +142,52 @@ async function install() {
   console.log(`Downloading from ${downloadUrl}...`);
   await downloadFile(downloadUrl, tarballPath);
 
-  // Download and verify checksum
-  console.log('Verifying checksum...');
-  try {
-    const checksumsUrl = getChecksumsUrl(VERSION);
-    const checksumsContent = await fetchText(checksumsUrl);
-    const checksums = parseChecksums(checksumsContent);
+  // Download and verify checksum (fail-closed: any failure aborts the install).
+  // Escape hatch for offline/dev only: set TOKENUSE_SKIP_CHECKSUM=1 to bypass (default OFF).
+  if (process.env.TOKENUSE_SKIP_CHECKSUM === '1') {
+    console.log('Warning: TOKENUSE_SKIP_CHECKSUM=1 set, skipping checksum verification (insecure).');
+  } else {
+    console.log('Verifying checksum...');
     const expectedFilename = getChecksumFilename(VERSION);
-    const expectedHash = checksums.get(expectedFilename);
 
-    if (expectedHash) {
-      const actualHash = await sha256File(tarballPath);
-      if (actualHash.toLowerCase() !== expectedHash.toLowerCase()) {
-        unlinkSync(tarballPath);
-        throw new Error(`Checksum verification failed!\nExpected: ${expectedHash}\nActual: ${actualHash}`);
-      }
-      console.log('Checksum verified.');
-    } else {
-      console.log('Warning: Checksum not found, skipping verification.');
+    // Fetch the published checksums. A network error / non-200 must abort —
+    // proceeding here would silently run an unverified native binary.
+    let checksums;
+    try {
+      const checksumsContent = await fetchText(getChecksumsUrl(VERSION));
+      checksums = parseChecksums(checksumsContent);
+    } catch (err) {
+      unlinkSync(tarballPath);
+      throw new Error(
+        `Could not fetch checksums for TokenUse CLI v${VERSION} (${err.message}).\n` +
+        `Refusing to install an unverified binary for ${platform.platform}.\n` +
+        `Please check your network/proxy and retry. If this persists, report it at https://github.com/tokenuse/tokenuse/issues`
+      );
     }
-  } catch (err) {
-    console.log(`Warning: Could not verify checksum: ${err.message}`);
+
+    // A checksums file with no entry for this platform's tarball must also abort —
+    // never skip-and-proceed.
+    const expectedHash = checksums.get(expectedFilename);
+    if (!expectedHash) {
+      unlinkSync(tarballPath);
+      throw new Error(
+        `No checksum found for ${expectedFilename} in the published checksums for v${VERSION}.\n` +
+        `Refusing to install an unverified binary for ${platform.platform}.\n` +
+        `This usually means the release is incomplete. Please retry, or report it at https://github.com/tokenuse/tokenuse/issues`
+      );
+    }
+
+    // Mismatch is fatal.
+    const actualHash = await sha256File(tarballPath);
+    if (actualHash.toLowerCase() !== expectedHash.toLowerCase()) {
+      unlinkSync(tarballPath);
+      throw new Error(
+        `Checksum verification failed for ${expectedFilename} (v${VERSION}, ${platform.platform}).\n` +
+        `Expected: ${expectedHash}\nActual:   ${actualHash}\n` +
+        `The download may be corrupted or tampered with. Please retry. If this persists, report it at https://github.com/tokenuse/tokenuse/issues`
+      );
+    }
+    console.log('Checksum verified.');
   }
 
   // Extract tarball

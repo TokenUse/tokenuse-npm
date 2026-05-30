@@ -79,8 +79,19 @@ TokenUse monitors your Claude Code session logs and tracks:
 - Token usage (input, output, cache)
 - Session activity
 - Model usage
+- Prompts and the paths they ran in (on by default, opt out anytime) — to power per-prompt analytics
 
-Data is securely streamed to the TokenUse API for analysis and visualization.
+Data is securely streamed over TLS to the TokenUse API for analysis and visualization.
+
+## Privacy
+
+Prompt capture is **on by default** so you get per-prompt analytics. Detected secrets are scrubbed on a best-effort basis before upload, prompts are retained per your retention setting and deleted on request, and we never collect model responses or your file contents. Turn prompt capture off anytime:
+
+```bash
+tokenuse config set prompts.enabled=false
+```
+
+You can also manage prompt capture and retention from the dashboard under Settings → Data.
 
 ## Links
 

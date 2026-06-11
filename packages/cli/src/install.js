@@ -10,7 +10,10 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const VERSION = '0.4.0';
+const VERSION = typeof __PKG_VERSION__ === 'string' ? __PKG_VERSION__ : process.env.TOKENUSE_INSTALL_VERSION;
+if (!VERSION) {
+  throw new Error('TokenUse installer version was not injected. Run `npm run build` before publishing.');
+}
 const RELEASE_BASE_URL = process.env.TOKENUSE_RELEASE_BASE_URL || 'https://github.com/tokenuse/tokenuse/releases';
 const BINARY_DIR = process.env.TOKENUSE_BINARY_DIR || join(__dirname, '..', '.tokenuse', 'bin');
 

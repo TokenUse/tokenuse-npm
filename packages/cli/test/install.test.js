@@ -8,7 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { create } from 'tar';
 
-const version = '0.4.0';
+const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const version = packageJson.version;
 const installScript = new URL('../src/install.js', import.meta.url);
 
 function platformName() {
@@ -74,6 +75,7 @@ async function runInstaller(baseUrl, binaryDir) {
         ...process.env,
         TOKENUSE_BINARY_DIR: binaryDir,
         TOKENUSE_RELEASE_BASE_URL: baseUrl,
+        TOKENUSE_INSTALL_VERSION: version,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

@@ -14,5 +14,5 @@
 ## Local Rules
 
 - Keep `postinstall` path and built file names stable.
-- Update `VERSION` in installer logic when releasing new binaries.
+- Installer version is injected from `package.json` during build; do not hardcode release versions in installer logic.
 - Preserve supported OS/CPU constraints in `package.json`.

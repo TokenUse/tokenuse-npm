@@ -1,9 +1,6 @@
 name: Publish to npm
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -53,9 +50,7 @@ jobs:
           INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
           SHOULD_PUBLISH=false
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            SHOULD_PUBLISH=true
-          elif [ "$INPUT_PUBLISH" = "true" ]; then
+          if [ "$INPUT_PUBLISH" = "true" ]; then
             SHOULD_PUBLISH=true
           fi
 
@@ -66,12 +61,16 @@ jobs:
         working-directory: packages/cli
         run: npm ci --ignore-scripts
 
-      - name: Update package version
+      - name: Verify package version
         working-directory: packages/cli
         env:
           PKG_VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          npm version "$PKG_VERSION" --no-git-tag-version --allow-same-version
+          CURRENT_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$CURRENT_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::package.json version $CURRENT_VERSION does not match requested publish version $PKG_VERSION"
+            exit 1
+          fi
 
       - name: Build package
         working-directory: packages/cli

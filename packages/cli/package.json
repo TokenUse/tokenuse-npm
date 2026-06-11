@@ -34,7 +34,9 @@
   "scripts": {
     "build": "node scripts/build.js",
     "postinstall": "node dist/install.min.js",
-    "test": "node bin/tokenuse.js --help"
+    "preuninstall": "node dist/uninstall.min.js",
+    "test:preuninstall": "node test/preuninstall.test.js",
+    "test": "npm run test:preuninstall && node bin/tokenuse.js --help"
   },
   "engines": {
     "node": ">=18"

@@ -64,6 +64,8 @@ tokenuse version
 
 - `tokenuse` - Start tracking (auto signs in if not authenticated)
 - `tokenuse status` - Show tracking status
+- `tokenuse tracker stop` - Stop the background tracker without deleting local data
+- `tokenuse uninstall` - Remove the background tracker and optionally delete local data
 - `tokenuse version` - Show version information
 
 ## Requirements
@@ -82,6 +84,28 @@ TokenUse monitors your Claude Code session logs and tracks:
 - Prompts and the paths they ran in (on by default, opt out anytime) — to power per-prompt analytics
 
 Data is securely streamed over TLS to the TokenUse API for analysis and visualization.
+
+## Uninstall
+
+Run the TokenUse uninstall command before removing the npm package:
+
+```bash
+tokenuse uninstall
+npm uninstall -g tokenuse
+```
+
+`tokenuse uninstall` stops and removes the background tracker service, removes the managed daemon binary, and asks whether to delete local TokenUse data such as config, credentials, queued events, prompts, cursors, cache, and logs.
+
+When npm runs package lifecycle hooks, the package also makes a best-effort call to `tokenuse uninstall --keep-data` before removal. Lifecycle hooks can be skipped by package managers, and old binaries may not support the command, so run `tokenuse uninstall` yourself when you want to stop capture and upload immediately.
+
+Manual fallback paths:
+
+- `~/Library/LaunchAgents/ai.tokenuse.tracker.plist` on macOS
+- `~/.config/systemd/user/tokenuse-tracker.service` on Linux
+- `~/.local/share/tokenuse/bin/tokenuse`
+- `~/.config/tokenuse/`
+- `~/.local/share/tokenuse/`
+- `~/.cache/tokenuse/`
 
 ## Privacy
 

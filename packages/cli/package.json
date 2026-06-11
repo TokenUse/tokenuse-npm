@@ -1,11 +1,13 @@
 {
   "name": "tokenuse",
   "version": "0.4.4",
-  "description": "Track and analyze Claude Code usage",
+  "description": "Track and analyze Claude Code and OpenAI Codex usage",
   "keywords": [
     "tokenuse",
     "claude",
     "claude-code",
+    "codex",
+    "openai",
     "anthropic",
     "usage",
     "tracking",

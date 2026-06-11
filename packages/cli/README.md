@@ -1,6 +1,6 @@
 # tokenuse
 
-Track and analyze your Claude Code usage with TokenUse.
+Track and analyze your Claude Code and OpenAI Codex usage with TokenUse.
 
 ## Quick Start
 
@@ -72,11 +72,11 @@ tokenuse version
 
 - Node.js 18 or later
 - macOS or Linux
-- Claude Code installed and used at least once
+- Claude Code or OpenAI Codex installed and used at least once
 
 ## How It Works
 
-TokenUse monitors your Claude Code session logs and tracks:
+TokenUse monitors supported local Claude Code and OpenAI Codex session logs and tracks:
 
 - Token usage (input, output, cache)
 - Session activity

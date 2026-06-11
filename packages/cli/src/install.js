@@ -3,6 +3,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import { extract } from 'tar';
+import http from 'http';
 import https from 'https';
 import os from 'os';
 
@@ -10,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const VERSION = '0.4.0';
-const BINARY_DIR = join(__dirname, '..', '.tokenuse', 'bin');
+const RELEASE_BASE_URL = process.env.TOKENUSE_RELEASE_BASE_URL || 'https://github.com/tokenuse/tokenuse/releases';
+const BINARY_DIR = process.env.TOKENUSE_BINARY_DIR || join(__dirname, '..', '.tokenuse', 'bin');
 
 // Platform detection (inlined from platform.js)
 function getPlatformInfo() {
@@ -22,11 +24,11 @@ function getPlatformInfo() {
 }
 
 function getDownloadUrl(version) {
-  return `https://github.com/tokenuse/tokenuse/releases/download/v${version}/tokenuse_${version}_${getPlatformInfo().platform}.tar.gz`;
+  return `${RELEASE_BASE_URL}/download/v${version}/tokenuse_${version}_${getPlatformInfo().platform}.tar.gz`;
 }
 
 function getChecksumsUrl(version) {
-  return `https://github.com/tokenuse/tokenuse/releases/download/v${version}/checksums.txt`;
+  return `${RELEASE_BASE_URL}/download/v${version}/checksums.txt`;
 }
 
 function getChecksumFilename(version) {
@@ -53,6 +55,13 @@ function parseChecksums(content) {
   return checksums;
 }
 
+function getUrl(url, callback) {
+  const parsed = new URL(url);
+  if (parsed.protocol === 'http:') return http.get(parsed, callback);
+  if (parsed.protocol === 'https:') return https.get(parsed, callback);
+  throw new Error(`Unsupported URL protocol: ${parsed.protocol}`);
+}
+
 /**
  * Download a file from URL.
  * @param {string} url - URL to download
@@ -62,7 +71,7 @@ async function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = createWriteStream(destPath);
 
-    const request = https.get(url, (response) => {
+    const request = getUrl(url, (response) => {
       // Handle redirects
       if (response.statusCode === 301 || response.statusCode === 302) {
         file.close();
@@ -106,7 +115,7 @@ async function downloadFile(url, destPath) {
  */
 async function fetchText(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    getUrl(url, (response) => {
       if (response.statusCode === 301 || response.statusCode === 302) {
         fetchText(response.headers.location).then(resolve).catch(reject);
         return;

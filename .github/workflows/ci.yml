@@ -32,10 +32,9 @@ jobs:
         working-directory: packages/cli
         run: npm run build
 
-      - name: Run package smoke test
+      - name: Run package tests
         working-directory: packages/cli
-        run: |
-          node --input-type=module -e "import('./src/platform.js').then((m) => { const p = m.getPlatformInfo(); if (!p.platform) { process.exit(1); } console.log(p.platform); })"
+        run: npm test
 
       - name: Verify package tarball
         working-directory: packages/cli

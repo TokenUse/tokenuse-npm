@@ -120,7 +120,7 @@ You can also manage prompt capture and retention from the dashboard under Settin
 ## Links
 
 - [Website](https://tokenuse.ai)
-- [Documentation](https://docs.tokenuse.ai)
+- [Documentation](https://github.com/tokenuse/tokenuse-cli#readme)
 - [GitHub](https://github.com/tokenuse/tokenuse)
 
 ## License

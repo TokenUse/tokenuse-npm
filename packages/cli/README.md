@@ -1,6 +1,15 @@
 # tokenuse
 
+![TokenUse brand banner](https://assets.tokenuse.ai/branding/readme-banner-v1.svg)
+
+[![npm version](https://img.shields.io/npm/v/tokenuse?label=npm)](https://www.npmjs.com/package/tokenuse)
+[![Homebrew tap version](https://img.shields.io/badge/homebrew-v0.4.4-fbb040?logo=homebrew&logoColor=white)](https://github.com/tokenuse/homebrew-tap/blob/main/Formula/tokenuse.rb)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Platform: macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-24292f)
+
 Track and analyze Claude Code and OpenAI Codex usage and costs with TokenUse.
+
+![TokenUse dashboard preview](https://assets.tokenuse.ai/branding/readme-dashboard-v1.png)
 
 ## Quick Start
 

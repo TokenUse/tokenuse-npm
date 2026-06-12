@@ -35,7 +35,8 @@
     "bin/",
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.txt"
   ],
   "scripts": {
     "build": "node scripts/build.js",

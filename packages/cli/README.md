@@ -47,6 +47,50 @@ brew tap tokenuse/tap
 brew install tokenuse
 ```
 
+## Behind a proxy
+
+The npm postinstall downloader honors proxy settings from npm config and the standard environment. npm config takes precedence:
+
+- `npm_config_https_proxy`
+- `npm_config_proxy`
+- `HTTPS_PROXY` / `https_proxy`
+- `HTTP_PROXY` / `http_proxy`
+
+Example:
+
+```bash
+npm config set https-proxy http://proxy.example.com:8080
+npm install -g tokenuse
+```
+
+Use `npm_config_noproxy`, `NO_PROXY`, or `no_proxy` to bypass the proxy for matching hosts. Entries may be `*`, exact hosts, host suffixes such as `.example.com`, or host-and-port pairs such as `localhost:8080`.
+
+If the binary download cannot reach GitHub Releases, the installer prints which proxy variables were detected, whether each release URL used a proxy or direct connection, and a link back to the manual install path below.
+
+## Offline / manual install
+
+Checksum verification remains required. Do not place a binary manually unless its SHA-256 matches the published `checksums.txt` for the same release.
+
+```bash
+VERSION=0.4.4
+PLATFORM=darwin_arm64 # darwin_amd64, linux_amd64, or linux_arm64
+
+npm install -g tokenuse --ignore-scripts
+
+curl -fsSLO "https://github.com/tokenuse/tokenuse/releases/download/v${VERSION}/tokenuse_${VERSION}_${PLATFORM}.tar.gz"
+curl -fsSLO "https://github.com/tokenuse/tokenuse/releases/download/v${VERSION}/checksums.txt"
+
+EXPECTED="$(awk -v file="tokenuse_${VERSION}_${PLATFORM}.tar.gz" '$2 == file { print $1 }' checksums.txt)"
+ACTUAL="$(shasum -a 256 "tokenuse_${VERSION}_${PLATFORM}.tar.gz" | awk '{ print $1 }')"
+test -n "$EXPECTED" && test "$EXPECTED" = "$ACTUAL"
+
+PKG_ROOT="$(npm root -g)/tokenuse"
+mkdir -p "$PKG_ROOT/.tokenuse/bin"
+tar -xzf "tokenuse_${VERSION}_${PLATFORM}.tar.gz" --strip-components=1 -C "$PKG_ROOT/.tokenuse/bin"
+chmod +x "$PKG_ROOT/.tokenuse/bin/tokenuse"
+tokenuse version
+```
+
 ## Usage
 
 ```bash

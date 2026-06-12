@@ -39,3 +39,41 @@ jobs:
       - name: Verify package tarball
         working-directory: packages/cli
         run: npm pack --dry-run
+
+  proxy-install:
+    name: Proxy install tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - '20'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: packages/cli/package-lock.json
+
+      - name: Install dependencies
+        working-directory: packages/cli
+        run: npm ci --ignore-scripts
+
+      - name: Build package
+        working-directory: packages/cli
+        run: npm run build
+
+      - name: Run proxy install tests
+        working-directory: packages/cli
+        run: npm run test:proxy
+
+      - name: Verify package tarball
+        working-directory: packages/cli
+        run: npm pack --dry-run

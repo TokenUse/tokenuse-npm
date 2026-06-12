@@ -1,6 +1,6 @@
 # tokenuse
 
-Track and analyze your Claude Code and OpenAI Codex usage with TokenUse.
+Track and analyze Claude Code and OpenAI Codex usage and costs with TokenUse.
 
 ## Quick Start
 
@@ -74,6 +74,12 @@ tokenuse version
 - macOS or Linux
 - Claude Code or OpenAI Codex installed and used at least once
 
+## Supported Agents
+
+- Claude Code: session tracking is supported today.
+- OpenAI Codex: session tracking is supported today.
+- Cursor Agent: device/home detection is supported for status reporting; full Cursor session tracking and cost reporting are not shipped yet.
+
 ## How It Works
 
 TokenUse monitors supported local Claude Code and OpenAI Codex session logs and tracks:
@@ -84,6 +90,13 @@ TokenUse monitors supported local Claude Code and OpenAI Codex session logs and 
 - Prompts and the paths they ran in (on by default, opt out anytime) — to power per-prompt analytics
 
 Data is securely streamed over TLS to the TokenUse API for analysis and visualization.
+
+## Upgrade
+
+```bash
+npm install -g tokenuse@latest
+tokenuse version
+```
 
 ## Uninstall
 
@@ -120,7 +133,8 @@ You can also manage prompt capture and retention from the dashboard under Settin
 ## Links
 
 - [Website](https://tokenuse.ai)
-- [Documentation](https://github.com/tokenuse/tokenuse-cli#readme)
+- [Documentation](https://tokenuse.ai/docs)
+- [Changelog](https://github.com/tokenuse/tokenuse/releases)
 - [GitHub](https://github.com/tokenuse/tokenuse)
 
 ## License

@@ -109,6 +109,8 @@ npm uninstall -g tokenuse
 
 `tokenuse uninstall` stops and removes the background tracker service, removes the managed daemon binary, and asks whether to delete local TokenUse data such as config, credentials, queued events, prompts, cursors, cache, and logs.
 
+If your installed version does not have `tokenuse uninstall`, run `tokenuse logout` first and type `delete` when prompted, then remove the npm package.
+
 When npm runs package lifecycle hooks, the package also makes a best-effort call to `tokenuse uninstall --keep-data` before removal. Lifecycle hooks can be skipped by package managers, and old binaries may not support the command, so run `tokenuse uninstall` yourself when you want to stop capture and upload immediately.
 
 Manual fallback paths:

@@ -1,0 +1,53 @@
+name: Bug report
+description: Report an npm or npx wrapper bug.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a package bug. Do not include tokens, secrets, prompt text, transcripts, or private paths.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the package install or launch problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: package-manager
+    attributes:
+      label: Package manager and version
+      placeholder: "npm 10.8.2, pnpm 9.15.0, bun 1.2.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and architecture
+      placeholder: "macOS 15 arm64, Ubuntu 24.04 x64"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact npm/npx command you ran.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted output
+      description: Remove tokens, secrets, prompt text, transcripts, and private paths.
+      render: shell
+    validations:
+      required: false

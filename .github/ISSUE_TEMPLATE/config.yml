@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://www.tokenuse.ai/security/disclosure
+    about: Do not open public issues for vulnerabilities; use the private security contact.
+  - name: Contact support
+    url: mailto:support@tokenuse.ai
+    about: Get help with account, billing, or install issues that are not repository bugs.
+  - name: Read the documentation
+    url: https://tokenuse.ai/docs
+    about: Review setup, privacy, and troubleshooting docs.

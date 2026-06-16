@@ -57,6 +57,27 @@ jobs:
           echo "SHOULD_PUBLISH=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
           echo "publish_mode=$SHOULD_PUBLISH"
 
+      # Pre-flight credential check (mirrors the fail-fast token gate in
+      # tokenuse-cli/.github/workflows/release.yml, W1-REL-3 / DEVOPS-SRE-08): when a
+      # real publish is requested, fail before the build/test/pack work if the
+      # publish credential is missing. This workflow is dispatch-only and touches no
+      # other repo, so it holds no TOKENUSE_CROSS_REPO_PAT to swap — the cross-repo
+      # GitHub App token replaces that PAT in release.yml. NPM_TOKEN remains the
+      # custodied publish credential (see DEPLOYMENT.md credential custody) and is
+      # the one verified here. Migration target: an npm trusted-publisher (OIDC)
+      # flow would drop NPM_TOKEN entirely; provenance (--provenance) already ships.
+      - name: Pre-flight publish credentials
+        if: steps.mode.outputs.SHOULD_PUBLISH == 'true'
+        env:
+          NPM_TOKEN_PRESENT: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$NPM_TOKEN_PRESENT" != "true" ]; then
+            echo "::error::publish=true but NPM_TOKEN is not configured on tokenuse/tokenuse-npm. Set the custodied npm token before publishing (W1-REL-3)."
+            exit 1
+          fi
+          echo "NPM_TOKEN present; proceeding to build and publish."
+
       - name: Install dependencies
         working-directory: packages/cli
         run: npm ci --ignore-scripts

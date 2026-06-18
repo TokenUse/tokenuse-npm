@@ -45,7 +45,8 @@
     "test:install": "node --test test/install.test.js",
     "test:proxy": "node --test --test-name-pattern=proxy test/install.test.js",
     "test:preuninstall": "node test/preuninstall.test.js",
-    "test": "npm run test:install && npm run test:preuninstall && node bin/tokenuse.js --help"
+    "test:bin": "node --test test/bin.test.js",
+    "test": "npm run test:install && npm run test:preuninstall && npm run test:bin"
   },
   "engines": {
     "node": ">=18"

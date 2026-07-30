@@ -1,6 +1,6 @@
 {
   "name": "tokenuse",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Track and analyze Claude Code and OpenAI Codex usage and costs",
   "keywords": [
     "tokenuse",

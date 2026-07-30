@@ -1,6 +1,6 @@
 # tokenuse
 
-![TokenUse brand banner](https://assets.tokenuse.ai/branding/readme-banner-v1.svg)
+![TokenUse brand banner](https://assets.tokenuse.ai/branding/readme-banner-v2.png)
 
 [![npm version](https://img.shields.io/npm/v/tokenuse?label=npm)](https://www.npmjs.com/package/tokenuse)
 [![Homebrew tap version](https://img.shields.io/badge/homebrew-v0.4.4-fbb040?logo=homebrew&logoColor=white)](https://github.com/tokenuse/homebrew-tap/blob/main/Formula/tokenuse.rb)

@@ -37,7 +37,7 @@ async function buildTarball(root) {
   return { platform, tarballName, tarballPath, hash };
 }
 
-async function withFixtureServer(checksumsText, tarballPath, fn) {
+async function withFixtureServer(checksumsText, tarballPath, fn, mirrorChecksumsText) {
   const sockets = new Set();
   const server = createServer(async (req, res) => {
     if (!req.url) {
@@ -48,6 +48,15 @@ async function withFixtureServer(checksumsText, tarballPath, fn) {
     if (req.url.endsWith('/checksums.txt')) {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end(checksumsText);
+      return;
+    }
+
+    // Second trust domain (SEC-V2-08): the installer cross-checks the release
+    // checksums against ${MIRROR_BASE}/v${VERSION}/SHA256SUMS. Serve a matching
+    // copy so the happy path verifies; mismatch is covered by its own test.
+    if (req.url.endsWith('/SHA256SUMS')) {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end(mirrorChecksumsText ?? checksumsText);
       return;
     }
 
@@ -78,7 +87,7 @@ async function withFixtureServer(checksumsText, tarballPath, fn) {
   }
 }
 
-async function withHttpsFixtureServer(checksumsText, tarballPath, tlsConfig, fn) {
+async function withHttpsFixtureServer(checksumsText, tarballPath, tlsConfig, fn, mirrorChecksumsText) {
   const sockets = new Set();
   const server = createHttpsServer(tlsConfig, async (req, res) => {
     if (!req.url) {
@@ -89,6 +98,15 @@ async function withHttpsFixtureServer(checksumsText, tarballPath, tlsConfig, fn)
     if (req.url.endsWith('/checksums.txt')) {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end(checksumsText);
+      return;
+    }
+
+    // Second trust domain (SEC-V2-08): the installer cross-checks the release
+    // checksums against ${MIRROR_BASE}/v${VERSION}/SHA256SUMS. Serve a matching
+    // copy so the happy path verifies; mismatch is covered by its own test.
+    if (req.url.endsWith('/SHA256SUMS')) {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end(mirrorChecksumsText ?? checksumsText);
       return;
     }
 
@@ -256,6 +274,7 @@ async function runInstaller(baseUrl, binaryDir, extraEnv = {}) {
         ...proxyEnvDefaults,
         TOKENUSE_BINARY_DIR: binaryDir,
         TOKENUSE_RELEASE_BASE_URL: baseUrl,
+        TOKENUSE_MIRROR_BASE: baseUrl,
         TOKENUSE_INSTALL_VERSION: version,
         ...extraEnv,
       },
@@ -315,6 +334,61 @@ test('installer extracts verified fixture binary', async () => {
     await withFixtureServer(checksums, fixture.tarballPath, async (baseUrl) => {
       const result = await runInstaller(baseUrl, binaryDir);
       assert.equal(result.code, 0, result.stderr);
+      const installed = await stat(join(binaryDir, 'tokenuse'));
+      assert.equal(Boolean(installed.mode & 0o111), true);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// SEC-V2-08: the release tarball and the checksums that verify it come from the
+// same release, so whoever can swap one can swap the other. The second trust
+// domain is what makes the checksum gate mean something — this proves a divergence
+// between the two publish paths aborts the install rather than being ignored.
+test('installer fails closed when the second-domain checksums disagree with the release copy', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tokenuse-install-mirror-'));
+  try {
+    const fixture = await buildTarball(root);
+    const binaryDir = join(root, 'bin');
+    const checksums = `${fixture.hash}  ${fixture.tarballName}\n`;
+    // The mirror reports a different hash for the same artifact — i.e. the release
+    // asset was swapped but the out-of-band anchor was not.
+    const tamperedMirror = `${'0'.repeat(64)}  ${fixture.tarballName}\n`;
+
+    await withFixtureServer(
+      checksums,
+      fixture.tarballPath,
+      async (baseUrl) => {
+        const result = await runInstaller(baseUrl, binaryDir);
+        assert.notEqual(result.code, 0, 'install must abort on a cross-domain checksum divergence');
+        assert.match(result.stderr, /second trust domain/i);
+        await assert.rejects(() => stat(join(binaryDir, 'tokenuse')));
+      },
+      tamperedMirror,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// And an unreachable mirror must warn-and-skip rather than fail: releases published
+// before the mirror existed have no entry, and a hard failure would break them.
+// This matches install.sh's pre-signing-key posture.
+test('installer proceeds with a warning when the second-domain mirror is unreachable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tokenuse-install-nomirror-'));
+  try {
+    const fixture = await buildTarball(root);
+    const binaryDir = join(root, 'bin');
+    const checksums = `${fixture.hash}  ${fixture.tarballName}\n`;
+
+    await withFixtureServer(checksums, fixture.tarballPath, async (baseUrl) => {
+      const result = await runInstaller(baseUrl, binaryDir, {
+        // Nothing listening here, so the mirror fetch fails.
+        TOKENUSE_MIRROR_BASE: 'http://127.0.0.1:1',
+      });
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /mirror unreachable/i);
       const installed = await stat(join(binaryDir, 'tokenuse'));
       assert.equal(Boolean(installed.mode & 0o111), true);
     });

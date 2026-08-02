@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
 
+# Least privilege: without an explicit block the workflow inherits the
+# repository default GITHUB_TOKEN scope, which may be read/write.
+permissions:
+  contents: read
+
 jobs:
   verify-agents:
     runs-on: ubuntu-latest

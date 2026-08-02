@@ -16,6 +16,13 @@ if (!VERSION) {
   throw new Error('TokenUse installer version was not injected. Run `npm run build` before publishing.');
 }
 const RELEASE_BASE_URL = process.env.TOKENUSE_RELEASE_BASE_URL || 'https://github.com/tokenuse/tokenuse/releases';
+// Second trust domain, mirroring tokenuse/install.sh (W1-REL-3 / CISO-02). The
+// checksum manifest is also published to a different repo served from a different
+// origin (raw.githubusercontent.com vs the release download host), and the two
+// copies are compared byte-for-byte. Without this the tarball and the checksums
+// that verify it come from the SAME release, so whoever can swap one can swap the
+// other and the checksum gate proves nothing. Override for testing.
+const MIRROR_BASE_URL = process.env.TOKENUSE_MIRROR_BASE || 'https://raw.githubusercontent.com/tokenuse/tokenuse-releases/main';
 const BINARY_DIR = process.env.TOKENUSE_BINARY_DIR || join(__dirname, '..', '.tokenuse', 'bin');
 const PROXY_ENV_KEYS = [
   'npm_config_https_proxy',
@@ -43,6 +50,10 @@ function getDownloadUrl(version) {
 
 function getChecksumsUrl(version) {
   return `${RELEASE_BASE_URL}/download/v${version}/checksums.txt`;
+}
+
+function getMirrorChecksumsUrl(version) {
+  return `${MIRROR_BASE_URL}/v${version}/SHA256SUMS`;
 }
 
 function getChecksumFilename(version) {
@@ -496,6 +507,35 @@ async function install() {
       );
     }
     console.log('Checksum verified.');
+
+    // --- Cross-domain checksum verification (W1-REL-3 / CISO-02) ---
+    // Compare the release's checksum manifest against the copy published to the
+    // second trust domain. A divergence means the two independent publish paths
+    // disagree, which we treat as tamper and abort. An unreachable mirror is a
+    // warn-and-skip, matching install.sh's pre-signing-key posture (older releases
+    // predate the mirror, so a hard failure here would break their installs).
+    const mirrorUrl = getMirrorChecksumsUrl(VERSION);
+    let mirrorContent = null;
+    try {
+      mirrorContent = await fetchText(mirrorUrl);
+    } catch {
+      console.log(
+        `Warning: second-domain checksum mirror unreachable (${mirrorUrl}); skipping cross-check.`
+      );
+    }
+
+    if (mirrorContent !== null) {
+      const mirrorHash = parseChecksums(mirrorContent).get(expectedFilename);
+      if (!mirrorHash || mirrorHash.toLowerCase() !== expectedHash.toLowerCase()) {
+        removeFileQuietly(tarballPath);
+        throw new Error(
+          `Checksums on the second trust domain do not match the release copy for ${expectedFilename}.\n` +
+          `Primary: ${getChecksumsUrl(VERSION)}\nMirror:  ${mirrorUrl}\n` +
+          `Refusing to install a possibly tampered binary.`
+        );
+      }
+      console.log('Second-domain checksums match.');
+    }
   }
 
   // Extract tarball

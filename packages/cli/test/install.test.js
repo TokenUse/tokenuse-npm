@@ -14,7 +14,7 @@ const packageJson = JSON.parse(await readFile(new URL('../package.json', import.
 const version = packageJson.version;
 process.env.TOKENUSE_INSTALL_VERSION ||= version;
 const installScript = new URL('../src/install.js', import.meta.url);
-const { formatProxyDiagnostics, resolveProxy } = await import('../src/install.js');
+const { formatProxyDiagnostics, resolveProxy, verifyMinisignSignature } = await import('../src/install.js');
 
 function platformName() {
   const osName = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : process.platform;
@@ -37,7 +37,7 @@ async function buildTarball(root) {
   return { platform, tarballName, tarballPath, hash };
 }
 
-async function withFixtureServer(checksumsText, tarballPath, fn, mirrorChecksumsText) {
+async function withFixtureServer(checksumsText, tarballPath, fn, mirrorChecksumsText, signatureText) {
   const sockets = new Set();
   const server = createServer(async (req, res) => {
     if (!req.url) {
@@ -48,6 +48,18 @@ async function withFixtureServer(checksumsText, tarballPath, fn, mirrorChecksums
     if (req.url.endsWith('/checksums.txt')) {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end(checksumsText);
+      return;
+    }
+
+    // SEC-V2-07: serve a signature only when the test supplies one, so the
+    // "key pinned but no signature published" abort path is also reachable.
+    if (req.url.endsWith('/SHA256SUMS.minisig')) {
+      if (signatureText === undefined) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end(signatureText);
       return;
     }
 
@@ -87,7 +99,7 @@ async function withFixtureServer(checksumsText, tarballPath, fn, mirrorChecksums
   }
 }
 
-async function withHttpsFixtureServer(checksumsText, tarballPath, tlsConfig, fn, mirrorChecksumsText) {
+async function withHttpsFixtureServer(checksumsText, tarballPath, tlsConfig, fn, mirrorChecksumsText, signatureText) {
   const sockets = new Set();
   const server = createHttpsServer(tlsConfig, async (req, res) => {
     if (!req.url) {
@@ -98,6 +110,18 @@ async function withHttpsFixtureServer(checksumsText, tarballPath, tlsConfig, fn,
     if (req.url.endsWith('/checksums.txt')) {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end(checksumsText);
+      return;
+    }
+
+    // SEC-V2-07: serve a signature only when the test supplies one, so the
+    // "key pinned but no signature published" abort path is also reachable.
+    if (req.url.endsWith('/SHA256SUMS.minisig')) {
+      if (signatureText === undefined) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end(signatureText);
       return;
     }
 
@@ -346,6 +370,99 @@ test('installer extracts verified fixture binary', async () => {
 // same release, so whoever can swap one can swap the other. The second trust
 // domain is what makes the checksum gate mean something — this proves a divergence
 // between the two publish paths aborts the install rather than being ignored.
+// SEC-V2-07: the pure-Node minisign verifier. Vectors were produced by real
+// minisign 0.12 (see test/fixtures/minisign/README.md), so these assert against
+// genuine output rather than against our own encoder.
+const minisignFixture = (name) => new URL(`./fixtures/minisign/${name}`, import.meta.url);
+
+test('verifyMinisignSignature accepts a genuine minisign signature', async () => {
+  const manifest = await readFile(minisignFixture('SHA256SUMS'));
+  const signature = await readFile(minisignFixture('SHA256SUMS.minisig'), 'utf8');
+  const pubkey = (await readFile(minisignFixture('test.pub.txt'), 'utf8')).trim();
+
+  const result = verifyMinisignSignature(manifest, signature, pubkey);
+  assert.equal(result.trustedComment, 'tokenuse test');
+});
+
+test('verifyMinisignSignature rejects a tampered manifest', async () => {
+  const signature = await readFile(minisignFixture('SHA256SUMS.minisig'), 'utf8');
+  const pubkey = (await readFile(minisignFixture('test.pub.txt'), 'utf8')).trim();
+
+  assert.throws(
+    () => verifyMinisignSignature(Buffer.from('deadbeef  tokenuse.tar.gz\n'), signature, pubkey),
+    /signature does not match/,
+  );
+});
+
+test('verifyMinisignSignature rejects a signature from a different key', async () => {
+  const manifest = await readFile(minisignFixture('SHA256SUMS'));
+  const signature = await readFile(minisignFixture('SHA256SUMS.minisig'), 'utf8');
+  // A well-formed but unrelated minisign public key.
+  const otherKey = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3';
+
+  assert.throws(() => verifyMinisignSignature(manifest, signature, otherKey), /different key/);
+});
+
+test('verifyMinisignSignature rejects malformed inputs rather than passing them', async () => {
+  const manifest = await readFile(minisignFixture('SHA256SUMS'));
+  const signature = await readFile(minisignFixture('SHA256SUMS.minisig'), 'utf8');
+  const pubkey = (await readFile(minisignFixture('test.pub.txt'), 'utf8')).trim();
+
+  assert.throws(() => verifyMinisignSignature(manifest, signature, 'not-base64!!'), /malformed/);
+  assert.throws(() => verifyMinisignSignature(manifest, 'untrusted comment: x\n', pubkey), /malformed/);
+});
+
+// End-to-end through the real installer: once a key is pinned, the signature stops
+// being optional. These two paths are what make SEC-V2-07 fail-closed rather than
+// verify-when-available.
+test('installer fails closed when a key is pinned but no signature is published', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tokenuse-install-nosig-'));
+  try {
+    const fixture = await buildTarball(root);
+    const binaryDir = join(root, 'bin');
+    const checksums = `${fixture.hash}  ${fixture.tarballName}\n`;
+    const pubkey = (await readFile(minisignFixture('test.pub.txt'), 'utf8')).trim();
+
+    // No signatureText passed -> the fixture server 404s the .minisig.
+    await withFixtureServer(checksums, fixture.tarballPath, async (baseUrl) => {
+      const result = await runInstaller(baseUrl, binaryDir, { TOKENUSE_MINISIGN_PUBKEY: pubkey });
+      assert.notEqual(result.code, 0, 'install must abort when the signature is missing');
+      assert.match(result.stderr, /no signature was found/i);
+      await assert.rejects(() => stat(join(binaryDir, 'tokenuse')));
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('installer fails closed when the published signature does not verify', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'tokenuse-install-badsig-'));
+  try {
+    const fixture = await buildTarball(root);
+    const binaryDir = join(root, 'bin');
+    const checksums = `${fixture.hash}  ${fixture.tarballName}\n`;
+    const pubkey = (await readFile(minisignFixture('test.pub.txt'), 'utf8')).trim();
+    // A structurally valid signature, but over different content than this release's
+    // manifest -- i.e. a replayed signature from another artifact.
+    const staleSignature = await readFile(minisignFixture('SHA256SUMS.minisig'), 'utf8');
+
+    await withFixtureServer(
+      checksums,
+      fixture.tarballPath,
+      async (baseUrl) => {
+        const result = await runInstaller(baseUrl, binaryDir, { TOKENUSE_MINISIGN_PUBKEY: pubkey });
+        assert.notEqual(result.code, 0, 'install must abort on an invalid signature');
+        assert.match(result.stderr, /signature verification failed/i);
+        await assert.rejects(() => stat(join(binaryDir, 'tokenuse')));
+      },
+      undefined,
+      staleSignature,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('installer fails closed when the second-domain checksums disagree with the release copy', async () => {
   const root = await mkdtemp(join(tmpdir(), 'tokenuse-install-mirror-'));
   try {

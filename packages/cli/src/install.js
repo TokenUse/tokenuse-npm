@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, createWriteStream, chmodSync, unlinkSync, createReadStream } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { createHash } from 'crypto';
+import { createHash, createPublicKey, verify as ed25519Verify } from 'crypto';
 import { extract } from 'tar';
 import http from 'http';
 import https from 'https';
@@ -54,6 +54,95 @@ function getChecksumsUrl(version) {
 
 function getMirrorChecksumsUrl(version) {
   return `${MIRROR_BASE_URL}/v${version}/SHA256SUMS`;
+}
+
+function getSignatureUrl(version) {
+  return `${RELEASE_BASE_URL}/download/v${version}/SHA256SUMS.minisig`;
+}
+
+// Committed minisign (Ed25519) public key used to verify SHA256SUMS.minisig.
+// Mirrors tokenuse/install.sh: while this equals the placeholder the installer
+// cannot verify signatures and warns-and-skips (verify-when-available). Once a
+// real key is set, a missing or invalid signature is FATAL. Replace with the
+// second line of the published minisign .pub file.
+const MINISIGN_PUBKEY = process.env.TOKENUSE_MINISIGN_PUBKEY || 'REPLACE_WITH_PUBLISHED_KEY';
+
+function minisignConfigured() {
+  return MINISIGN_PUBKEY !== 'REPLACE_WITH_PUBLISHED_KEY' && MINISIGN_PUBKEY.trim() !== '';
+}
+
+// --- minisign verification (pure Node; no minisign binary required) ---
+//
+// Layouts, per the minisign spec:
+//   public key : base64( 2-byte alg "Ed" | 8-byte key id | 32-byte ed25519 key )
+//   .minisig   : line 2 = base64( 2-byte alg | 8-byte key id | 64-byte signature )
+//                line 4 = base64( 64-byte signature over (signature | trusted comment) )
+// alg "Ed" signs the file bytes; "ED" signs BLAKE2b-512 of them (minisign >= 0.9
+// emits "ED" by default). Both are accepted.
+
+function parseMinisignPublicKey(line) {
+  const raw = Buffer.from(String(line).trim(), 'base64');
+  if (raw.length !== 42) {
+    throw new Error(`malformed minisign public key (expected 42 bytes, got ${raw.length})`);
+  }
+  return { keyId: raw.subarray(2, 10), key: raw.subarray(10, 42) };
+}
+
+function parseMinisignSignature(text) {
+  const lines = String(text).split('\n').filter((line) => line.trim() !== '');
+  if (lines.length < 2) throw new Error('malformed minisign signature file');
+  const blob = Buffer.from(lines[1].trim(), 'base64');
+  if (blob.length !== 74) {
+    throw new Error(`malformed minisign signature (expected 74 bytes, got ${blob.length})`);
+  }
+  const prefix = 'trusted comment: ';
+  const commentLine = lines[2] ?? '';
+  return {
+    alg: blob.subarray(0, 2).toString('latin1'),
+    keyId: blob.subarray(2, 10),
+    signature: blob.subarray(10, 74),
+    trustedComment: commentLine.startsWith(prefix) ? commentLine.slice(prefix.length) : '',
+    globalSignature: Buffer.from((lines[3] ?? '').trim(), 'base64'),
+  };
+}
+
+function ed25519PublicKeyObject(raw32) {
+  // SPKI DER prefix for an Ed25519 public key, then the raw 32 bytes.
+  const der = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw32]);
+  return createPublicKey({ key: der, format: 'der', type: 'spki' });
+}
+
+/** Verify a minisign signature over `fileBytes`. Throws on any failure. */
+export function verifyMinisignSignature(fileBytes, signatureText, publicKeyLine) {
+  const pub = parseMinisignPublicKey(publicKeyLine);
+  const sig = parseMinisignSignature(signatureText);
+
+  if (!pub.keyId.equals(sig.keyId)) {
+    throw new Error('signature was produced by a different key than the one pinned in this installer');
+  }
+
+  const key = ed25519PublicKeyObject(pub.key);
+  let message;
+  if (sig.alg === 'ED') {
+    message = createHash('blake2b512').update(fileBytes).digest();
+  } else if (sig.alg === 'Ed') {
+    message = fileBytes;
+  } else {
+    throw new Error(`unsupported minisign algorithm "${sig.alg}"`);
+  }
+
+  if (!ed25519Verify(null, message, key, sig.signature)) {
+    throw new Error('signature does not match the checksum manifest');
+  }
+
+  // The trusted comment is only meaningful if it is itself signed; skipping this
+  // would let an attacker rewrite it freely.
+  const globalMessage = Buffer.concat([sig.signature, Buffer.from(sig.trustedComment, 'utf8')]);
+  if (!ed25519Verify(null, globalMessage, key, sig.globalSignature)) {
+    throw new Error('trusted-comment signature does not verify');
+  }
+
+  return { trustedComment: sig.trustedComment };
 }
 
 function getChecksumFilename(version) {
@@ -470,8 +559,10 @@ async function install() {
     // Fetch the published checksums. A network error / non-200 must abort —
     // proceeding here would silently run an unverified native binary.
     let checksums;
+    // Hoisted: the signature step below verifies over these exact manifest bytes.
+    let checksumsContent;
     try {
-      const checksumsContent = await fetchText(getChecksumsUrl(VERSION));
+      checksumsContent = await fetchText(getChecksumsUrl(VERSION));
       checksums = parseChecksums(checksumsContent);
     } catch (err) {
       removeFileQuietly(tarballPath);
@@ -535,6 +626,46 @@ async function install() {
         );
       }
       console.log('Second-domain checksums match.');
+    }
+
+    // --- minisign signature verification (W1-REL-3 / CISO-02) ---
+    // Verify-when-available, matching install.sh: with no key pinned we warn and
+    // continue (checksum + cross-domain checks still applied). Once a real key is
+    // pinned, a missing or invalid signature is FATAL.
+    if (!minisignConfigured()) {
+      console.log(
+        'Warning: minisign public key not yet published in installer; skipping signature verification.'
+      );
+    } else {
+      const signatureUrl = getSignatureUrl(VERSION);
+      let signatureText;
+      try {
+        signatureText = await fetchText(signatureUrl);
+      } catch (err) {
+        removeFileQuietly(tarballPath);
+        throw new Error(
+          `A signing key is configured but no signature was found at ${signatureUrl} (${err.message}).\n` +
+          `Refusing to install an unsigned binary.`
+        );
+      }
+
+      try {
+        // Signature covers the checksum manifest, and the manifest's hash was
+        // matched against the tarball above -- so this transitively authenticates
+        // the downloaded artifact.
+        const { trustedComment } = verifyMinisignSignature(
+          Buffer.from(checksumsContent, 'utf8'),
+          signatureText,
+          MINISIGN_PUBKEY,
+        );
+        console.log(`Signature verified${trustedComment ? ` (${trustedComment})` : ''}.`);
+      } catch (err) {
+        removeFileQuietly(tarballPath);
+        throw new Error(
+          `minisign signature verification failed for SHA256SUMS (v${VERSION}): ${err.message}\n` +
+          `Refusing to install a possibly tampered binary.`
+        );
+      }
     }
   }
 

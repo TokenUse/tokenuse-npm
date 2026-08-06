@@ -1,0 +1,21 @@
+name: AGENTS Guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: without an explicit block the workflow inherits the
+# repository default GITHUB_TOKEN scope, which may be read/write.
+permissions:
+  contents: read
+
+jobs:
+  verify-agents:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Verify AGENTS coverage
+        run: bash devops/agents/verify-agents.sh

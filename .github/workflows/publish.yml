@@ -1,0 +1,128 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (without v prefix)'
+        required: true
+        type: string
+      publish:
+        description: 'Set true to publish to npm (false runs validation only)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Get version from tag
+        id: version
+        env:
+          WORKFLOW_INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$WORKFLOW_INPUT_VERSION" ]; then
+            echo "VERSION=$WORKFLOW_INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG_NAME#v}"
+            echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine publish mode
+        id: mode
+        env:
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          SHOULD_PUBLISH=false
+          if [ "$INPUT_PUBLISH" = "true" ]; then
+            SHOULD_PUBLISH=true
+          fi
+
+          echo "SHOULD_PUBLISH=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "publish_mode=$SHOULD_PUBLISH"
+
+      # Pre-flight credential check (mirrors the fail-fast token gate in
+      # tokenuse-cli/.github/workflows/release.yml, W1-REL-3 / DEVOPS-SRE-08): when a
+      # real publish is requested, fail before the build/test/pack work if the
+      # publish credential is missing. This workflow is dispatch-only and touches no
+      # other repo, so it holds no TOKENUSE_CROSS_REPO_PAT to swap — the cross-repo
+      # GitHub App token replaces that PAT in release.yml. NPM_TOKEN remains the
+      # custodied publish credential (see DEPLOYMENT.md credential custody) and is
+      # the one verified here. Migration target: an npm trusted-publisher (OIDC)
+      # flow would drop NPM_TOKEN entirely; provenance (--provenance) already ships.
+      - name: Pre-flight publish credentials
+        if: steps.mode.outputs.SHOULD_PUBLISH == 'true'
+        env:
+          NPM_TOKEN_PRESENT: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$NPM_TOKEN_PRESENT" != "true" ]; then
+            echo "::error::publish=true but NPM_TOKEN is not configured on tokenuse/tokenuse-npm. Set the custodied npm token before publishing (W1-REL-3)."
+            exit 1
+          fi
+          echo "NPM_TOKEN present; proceeding to build and publish."
+
+      - name: Install dependencies
+        working-directory: packages/cli
+        run: npm ci --ignore-scripts
+
+      - name: Verify package version
+        working-directory: packages/cli
+        env:
+          PKG_VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          CURRENT_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$CURRENT_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::package.json version $CURRENT_VERSION does not match requested publish version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Build package
+        working-directory: packages/cli
+        run: npm run build
+
+      - name: Run package tests
+        working-directory: packages/cli
+        run: npm test
+
+      - name: Verify package contents
+        working-directory: packages/cli
+        run: npm pack --dry-run
+
+      - name: Ensure version is not already published
+        if: steps.mode.outputs.SHOULD_PUBLISH == 'true'
+        working-directory: packages/cli
+        env:
+          PKG_VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if npm view "tokenuse@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "::error::tokenuse@$PKG_VERSION is already published on npm."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        if: steps.mode.outputs.SHOULD_PUBLISH == 'true'
+        working-directory: packages/cli
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Validation-only summary
+        if: steps.mode.outputs.SHOULD_PUBLISH != 'true'
+        run: echo "Validation completed. Publish step skipped (publish=false)."

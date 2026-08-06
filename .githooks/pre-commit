@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${SKIP_AGENTS_GUARD:-}" == "1" ]]; then
+  echo "[pre-commit] SKIP_AGENTS_GUARD=1 set; skipping AGENTS guard."
+  exit 0
+fi
+
+./devops/agents/verify-agents.sh --staged

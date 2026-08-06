@@ -1,0 +1,68 @@
+{
+  "name": "tokenuse",
+  "version": "0.4.7",
+  "description": "Track and analyze Claude Code and OpenAI Codex usage and costs",
+  "keywords": [
+    "tokenuse",
+    "claude",
+    "claude-code",
+    "codex",
+    "openai-codex",
+    "openai",
+    "cursor",
+    "anthropic",
+    "ai-usage",
+    "token-tracking",
+    "usage",
+    "tracking",
+    "cli"
+  ],
+  "homepage": "https://tokenuse.ai",
+  "bugs": {
+    "url": "https://github.com/TokenUse/tokenuse/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TokenUse/tokenuse-npm.git"
+  },
+  "license": "MIT",
+  "author": "TokenUse",
+  "type": "module",
+  "bin": {
+    "tokenuse": "bin/tokenuse.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.txt"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "postinstall": "node dist/install.min.js",
+    "preuninstall": "node dist/uninstall.min.js",
+    "test:install": "node --test test/install.test.js",
+    "test:proxy": "node --test --test-name-pattern=proxy test/install.test.js",
+    "test:preuninstall": "node test/preuninstall.test.js",
+    "test:bin": "node --test test/bin.test.js",
+    "test": "npm run test:install && npm run test:preuninstall && npm run test:bin"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "dependencies": {
+    "tar": "^7.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
